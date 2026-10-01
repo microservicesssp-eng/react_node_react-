@@ -1,0 +1,119 @@
+ДЕМО: REACT + NODE.JS + SQLITE
+===============================
+
+На вопрос «можно ли сделать то же самое без SQLite?»
+Да. Для показа сообщений можно хранить их только в памяти Node.js или в состоянии React,
+но после остановки/перезапуска данные исчезнут. Можно также сохранять их в JSON-файл.
+SQLite выбрана здесь потому, что это настоящая постоянная база данных в одном локальном
+файле: не нужен отдельный сервер СУБД, а сообщения переживают перезапуск приложения.
+
+ЧТО ЕСТЬ В ПРОЕКТЕ
+------------------
+1. Левая панель «Новое сообщение»: поля имени отправителя и текста, счётчик символов,
+   кнопка отправки. Имя обязательно (1–60 символов), текст — 1–2000 символов.
+2. Правая панель «Полученные»: список сообщений, имя, время получения и текст.
+   Лента обновляется автоматически каждые 2 секунды, поэтому открытые страницы видят
+   сообщения, отправленные с другой вкладки/устройства в той же сети.
+3. React — интерфейс. Vite — локальный сервер интерфейса. Node.js + Express — API.
+   SQLite — постоянное хранение. API проверяет ввод перед записью.
+4. База по умолчанию создаётся автоматически в data/messages.db. Время записывается
+   как ISO 8601 в UTC, в интерфейсе показывается по часовому поясу браузера.
+5. Для большого экрана обе панели расположены рядом на одном экране. На узком экране
+   панели переключаются в вертикальную раскладку.
+
+ЗАПУСК
+------
+Требуется Node.js 20+ и npm. Откройте терминал Ubuntu в папке проекта:
+
+  cd /home/karim/react_ex/react_node_react
+  npm install
+  npm run dev
+
+Откройте адрес, который напечатает Vite (обычно http://localhost:5173).
+Остановить приложение: Ctrl+C в терминале. Для запуска после первой установки
+достаточно снова выполнить npm run dev.
+
+Для production-сборки интерфейса:
+  npm run build
+
+Для отдельного запуска только API:
+  npm start
+API слушает порт 3001; в разработке npm run dev одновременно запускает API и Vite.
+
+ПРОСМОТР СООБЩЕНИЙ ЧЕРЕЗ ТЕРМИНАЛ UBUNTU
+-----------------------------------------
+Самый удобный способ (SQLite CLI):
+
+  cd /home/karim/react_ex/react_node_react
+  sqlite3 data/messages.db
+
+В появившемся приглашении sqlite> выполните:
+
+  .headers on
+  .mode column
+  SELECT id, sender, text, received_at FROM messages ORDER BY id DESC;
+
+Выйти из sqlite3:
+  .quit
+
+Одной командой вывести последние 20 сообщений и завершиться:
+
+  cd /home/karim/react_ex/react_node_react
+  sqlite3 -header -column data/messages.db \
+    "SELECT id, sender, text, received_at FROM messages ORDER BY id DESC LIMIT 20;"
+
+Если команда sqlite3 не найдена, установите клиент (само приложение от него не зависит):
+
+  sudo apt update
+  sudo apt install sqlite3
+
+Полезные запросы:
+
+  -- Количество сохранённых сообщений
+  SELECT COUNT(*) FROM messages;
+
+  -- Поиск сообщений отправителя по имени
+  SELECT id, sender, text, received_at
+  FROM messages
+  WHERE sender LIKE '%Анна%'
+  ORDER BY id DESC;
+
+  -- Схема таблицы
+  .schema messages
+
+  -- Выгрузка всех строк в CSV-файл
+  .headers on
+  .mode csv
+  .output messages.csv
+  SELECT id, sender, text, received_at FROM messages ORDER BY id;
+  .output stdout
+
+Откройте SQLite только для чтения, чтобы исключить случайное изменение данных:
+
+  sqlite3 -readonly data/messages.db
+
+При запущенном сервере SQLite может держать журнал WAL рядом с базой; пользуйтесь
+sqlite3-командой выше — SQLite корректно покажет сохранённые данные. Не удаляйте
+файлы messages.db-wal и messages.db-shm вручную во время работы приложения.
+
+API
+---
+GET  http://localhost:3001/api/messages?limit=100 — последние сообщения (1–500).
+POST http://localhost:3001/api/messages — создать сообщение.
+Пример:
+
+  curl -X POST http://localhost:3001/api/messages \
+    -H 'Content-Type: application/json' \
+    -d '{"sender":"Анна","text":"Привет из терминала!"}'
+
+Затем запросите список:
+  curl 'http://localhost:3001/api/messages?limit=20'
+
+РАСПОЛОЖЕНИЕ ФАЙЛОВ
+-------------------
+server/index.js — API, проверка полей и схема/запись SQLite.
+src/App.jsx — React-интерфейс, отправка и периодическое получение сообщений.
+src/style.css — оформление и адаптивная раскладка.
+vite.config.js — проксирование /api от Vite к Node API.
+data/messages.db — создаваемый при первом запуске файл базы.
+package.json — команды запуска и зависимости.
